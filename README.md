@@ -1,12 +1,12 @@
 🚙 BMW Strategic Intelligence AI (CEO Advisor)
 
-📌 Project Overview
+Project Overview
 
 Organizations today operate in an environment of continuous information flow. This project implements an AI-powered Strategic Intelligence Agent that continuously collects, analyzes, and reasons over live information related to the BMW Group.
 
 It acts as a digital advisor to the CEO, moving beyond standard information retrieval (search) to generate actionable, evidence-based business insights.
 
-🏗️ 1. System Architecture Diagram
+1. System Architecture Diagram
 
 The system is built on a highly modular Retrieval-Augmented Generation (RAG) architecture, running on a GPU-accelerated environment.
 
@@ -24,7 +24,7 @@ The system is built on a highly modular Retrieval-Augmented Generation (RAG) arc
                         +------------------+      +-------------------+
 
 
-🌊 2. Data Flow Diagram
+2. Data Flow Diagram
 
 The data lifecycle is divided into two distinct phases: Ingestion and Retrieval/Reasoning.
 
@@ -48,7 +48,7 @@ Sentiment Analysis: FinBERT processes the raw text to map the polarity of the ma
 
 Reasoning: Meta's Llama 3 receives the retrieved context alongside a strict system prompt, synthesizing the data into structured strategic recommendations (Expected Impact, Risk Assessment).
 
-💻 3. Technology Stack
+3. Technology Stack
 
 Frontend Dashboard: Streamlit (Python)
 
@@ -62,7 +62,7 @@ Sentiment Transformer: ProsusAI/finbert (PyTorch / CUDA)
 
 Data Processing: Pandas, BeautifulSoup, Feedparser
 
-🧠 4. Design Decisions & AI Pipeline Justifications
+4. Design Decisions & AI Pipeline Justifications
 
 Why RSS Feeds instead of HTML Web Scraping?
 
