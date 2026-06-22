@@ -5,3 +5,4 @@ beautifulsoup4==4.12.3
 requests==2.31.0
 pandas==2.2.2
 ollama==0.2.1
+matplotlib

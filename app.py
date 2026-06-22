@@ -3,6 +3,7 @@ import json
 import pandas as pd
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
+import matplotlib.pyplot as plt
 from src.agent import analyze_strategic_query
 
 st.set_page_config(page_title="BMW Strategic AI CEO", layout="wide", page_icon="🚙")
@@ -104,6 +105,26 @@ with tab4:
                 col1.metric("Transformer News Sentiment", f"{avg_news:.2f}")
                 col2.metric("Transformer Public Sentiment", f"{avg_pub:.2f}")
                 
+                # --- NEW PIE CHART CODE STARTS HERE ---
+                st.subheader("Sentiment Distribution")
+                
+                # Categorize the raw FinBERT scores for the Pie Chart
+                def categorize_sentiment(score):
+                    if score > 0.05: return 'Positive'
+                    elif score < -0.05: return 'Negative'
+                    else: return 'Neutral'
+                
+                df['Sentiment_Category'] = df['Sentiment_Score'].apply(categorize_sentiment)
+                sentiment_counts = df['Sentiment_Category'].value_counts()
+                
+                # Draw the Pie Chart
+                fig, ax = plt.subplots(figsize=(4, 4))
+                fig.patch.set_alpha(0.0) # Transparent background for dark mode
+                ax.pie(sentiment_counts, labels=sentiment_counts.index, autopct='%1.1f%%', 
+                       colors=['#4ade80', '#94a3b8', '#f87171'], textprops={'color':"w"})
+                st.pyplot(fig)
+                # --- NEW PIE CHART CODE ENDS HERE ---
+
                 st.subheader("Sentiment Trends across Sources")
                 trend_data = df.groupby('source')['Sentiment_Score'].mean().head(15)
                 st.bar_chart(trend_data)

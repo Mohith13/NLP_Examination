@@ -21,7 +21,11 @@ def analyze_strategic_query(query_type):
         return "No data available in the knowledge base.", []
 
     # Join the chunks into a single string to feed to the LLM
-    context_string = "\n\n".join(context_docs)
+    context_parts = []
+    for doc, m in zip(context_docs, meta):
+        source_name = m.get('source', 'Unknown Source')
+        context_parts.append(f"[Source: {source_name}]\n{doc}")
+    context_string = "\n\n".join(context_parts)
     
     # 2. Strict Agentic Prompting [cite: 118-133]
     prompt = f"""
@@ -30,11 +34,12 @@ def analyze_strategic_query(query_type):
     
     {context_string}
     
-    Provide your output in a clear, executive-level format. You MUST include:
-    1. The primary {query_type} identified.
-    2. The supporting evidence (quote or reference the text provided).
-    3. The Expected Impact.
-    4. Strategic Recommendation (What management should do next).
+    Provide your output in a clear, executive-level format. For EACH item, you MUST include:
+- **{query_type} / Recommendation:** [State the finding and action clearly]
+- **Priority:** [High / Medium / Low]
+- **Supporting Evidence:** [Quote the specific fact AND provide the [Source: ...] name]
+- **Expected Impact:** [What this will achieve or cost the business]
+- **Risk Level:** [High / Medium / Low]
     
     Do not invent information. Rely ONLY on the provided text. Keep it concise.
     """
