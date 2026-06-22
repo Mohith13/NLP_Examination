@@ -41,12 +41,7 @@ def analyze_strategic_query(query_type):
     
     # 3. Call your local 4GB-optimized model [cite: 184]
     try:
-        response = ollama.chat(model='phi', messages=[
-            {
-                'role': 'user',
-                'content': prompt
-            }
-        ])
+        response = ollama.chat(model='llama3', messages=[{'role': 'user', 'content': prompt}])
         return response['message']['content'], meta
     except Exception as e:
         return f"Error communicating with local LLM: {e}. Is the Ollama app running?", []

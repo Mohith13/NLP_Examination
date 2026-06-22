@@ -1,81 +1,120 @@
 import streamlit as st
 import json
+import pandas as pd
+import torch
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from src.agent import analyze_strategic_query
 
-# Configure the page layout
 st.set_page_config(page_title="BMW Strategic AI CEO", layout="wide", page_icon="🚙")
+st.title("🚙 BMW Executive Intelligence Dashboard")
 
-st.title("🚙 BMW Group Executive Intelligence Dashboard")
+# Load FinBERT from Hugging Face (Runs locally on your RTX A6000)
+@st.cache_resource
+def load_sentiment_model():
+    tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")
+    model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
+    # Move model to the RTX A6000 GPU
+    if torch.cuda.is_available():
+        model = model.to('cuda')
+    return tokenizer, model
 
-# Safely load the article count for the sidebar
+tokenizer, model = load_sentiment_model()
+
+def get_finbert_sentiment(text):
+    inputs = tokenizer(text, padding=True, truncation=True, return_tensors="pt")
+    if torch.cuda.is_available():
+        inputs = {k: v.to('cuda') for k, v in inputs.items()}
+    with torch.no_grad():
+        outputs = model(**inputs)
+    prediction = torch.nn.functional.softmax(outputs.logits, dim=-1)
+    # FinBERT labels: 0 -> Positive, 1 -> Negative, 2 -> Neutral
+    probs = prediction.cpu().numpy()[0]
+    score = probs[0] - probs[1] # Net sentiment calculation
+    return score
+
+# Load and prepare data
 try:
     with open('data/raw_articles.json', 'r', encoding='utf-8') as f:
         articles = json.load(f)
-        doc_count = len(articles)
+        df = pd.DataFrame(articles)
 except FileNotFoundError:
-    doc_count = 0
-    articles = []
+    articles, df = [], pd.DataFrame()
 
 # --- Section 1: Company Overview ---
-st.sidebar.header("Section 1: Company Overview")
+st.sidebar.header("Company Overview")
 st.sidebar.write("**Company:** BMW Group")
-st.sidebar.write("**Industry:** Premium Automotive Manufacturing")
-st.sidebar.write(f"**Documents Indexed:** {doc_count}")
-st.sidebar.write("**Data Sources:** Financial & Tech News RSS")
-st.sidebar.caption("Status: Systems Online 🟢")
+st.sidebar.write("**Industry:** Premium Automotive")
+st.sidebar.write(f"**Documents Indexed:** {len(articles)}")
+st.sidebar.write("**Data Sources:** Financial News RSS, Google Feeds")
+if not df.empty:
+    st.sidebar.write(f"**Last Update:** {df['date'].iloc[0]}")
 
-# Create tabs for the dashboard interface
-tab1, tab2, tab3, tab4 = st.tabs([
+# Layout tabs
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "CEO Briefing & Recs", 
     "Opportunity Monitor", 
     "Risk Monitor", 
-    "Market Intelligence"
+    "Sentiment Analysis",
+    "Market Intel"
 ])
 
 with tab1:
-    # --- Section 6 & 7: Recommendations and CEO Briefing ---
-    st.header("Executive Briefing & Strategic Recommendations")
-    st.write("Generate a high-level executive summary based on the latest vector data.")
-    
-    if st.button("Generate Executive Briefing", type="primary"):
-        with st.spinner("Synthesizing corporate strategy..."):
-            insight, sources = analyze_strategic_query("corporate strategy")
-            st.write(insight)
+    col1, col2 = st.columns(2)
+    with col1:
+        st.header("CEO Briefing")
+        if st.button("Generate Briefing", type="primary"):
+            with st.spinner("Compiling briefing via Llama3..."):
+                brief, sources = analyze_strategic_query("ceo_briefing")
+                st.write(brief)
+    with col2:
+        st.header("Strategic Recommendations")
+        if st.button("Generate Recommendations"):
+            with st.spinner("Generating strategy..."):
+                rec, sources = analyze_strategic_query("recommendations")
+                st.write(rec)
 
 with tab2:
-    # --- Section 3: Opportunity Monitor ---
     st.header("Opportunity Monitor")
-    if st.button("Scan Market Opportunities"):
-        with st.spinner("Querying ChromaDB for expansion trends..."):
-            insights, sources = analyze_strategic_query("opportunities")
-            st.write(insights)
-            if sources:
-                st.subheader("Supporting Evidence Sources:")
-                for source in sources:
-                    st.caption(f"• {source['title']} ({source['source']})")
+    if st.button("Scan Opportunities"):
+        with st.spinner("Querying ChromaDB..."):
+            opps, sources = analyze_strategic_query("opportunities")
+            st.write(opps)
 
 with tab3:
-    # --- Section 4: Risk Monitor ---
     st.header("Risk Monitor")
-    if st.button("Scan Strategic Risks"):
-        with st.spinner("Querying ChromaDB for market threats..."):
-            insights, sources = analyze_strategic_query("risks")
-            st.write(insights)
-            if sources:
-                st.subheader("Supporting Evidence Sources:")
-                for source in sources:
-                    st.caption(f"• {source['title']} ({source['source']})")
+    if st.button("Scan Risks"):
+        with st.spinner("Querying ChromaDB..."):
+            risks, sources = analyze_strategic_query("risks")
+            st.write(risks)
 
 with tab4:
-    # --- Section 2 & 5: Market Intelligence and Sentiment ---
-    st.header("Market Intelligence Feed")
-    st.write("Recent headlines actively shaping the vector database:")
-    
-    if articles:
-        # Display the 5 most recent articles
-        for article in articles[:5]: 
-            st.markdown(f"**{article['title']}**")
-            st.caption(f"Publisher: {article['source']} | Date: {article['date']}")
-            st.divider()
+    st.header("Sentiment Analysis")
+    if not df.empty:
+        if st.button("Run GPU Sentiment Analysis"):
+            with st.spinner("Analyzing text polarity via FinBERT Transformer..."):
+                df['Sentiment_Score'] = df['title'].apply(get_finbert_sentiment)
+                
+                df['Type'] = 'Public Sentiment'
+                df.loc[df['source'].str.contains("News|Reuters|Bloomberg", case=False, na=False), 'Type'] = 'News Sentiment'
+                
+                avg_news = df[df['Type'] == 'News Sentiment']['Sentiment_Score'].mean()
+                avg_pub = df[df['Type'] == 'Public Sentiment']['Sentiment_Score'].mean()
+                
+                col1, col2 = st.columns(2)
+                col1.metric("Transformer News Sentiment", f"{avg_news:.2f}")
+                col2.metric("Transformer Public Sentiment", f"{avg_pub:.2f}")
+                
+                st.subheader("Sentiment Trends across Sources")
+                trend_data = df.groupby('source')['Sentiment_Score'].mean().head(15)
+                st.bar_chart(trend_data)
     else:
-        st.warning("No news data available. Please run the scraper pipeline.")
+        st.warning("No data available.")
+
+with tab5:
+    st.header("Market Intelligence")
+    if articles:
+        st.subheader("Emerging Technologies & Competitor Activities")
+        for article in articles[:5]:
+            st.markdown(f"**{article['title']}**")
+            st.caption(f"Source: {article['source']} | Date: {article['date']}")
+            st.divider()
