@@ -1,0 +1,20 @@
+# Virtual Environment
+venv/
+.venv/
+env/
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local Database files (Keep repo lightweight)
+*.db
+*.sqlite3
+chroma_db/
+
+# Streamlit Local Configs & System Files
+.streamlit/
+.DS_Store
+.ipynb_checkpoints/
