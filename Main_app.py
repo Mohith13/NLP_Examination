@@ -85,9 +85,9 @@ with st.sidebar:
     if st.button("3. Refresh Dashboard", use_container_width=True):
         st.rerun()
 
-    st.divider()
-    st.markdown("**Exam demo sequence**")
-    st.markdown("1. Run collection\n2. Generate insights\n3. Ask CEO question\n4. Show Agent Trace")
+    # st.divider()
+    # st.markdown("**Exam demo sequence**")
+    # st.markdown("1. Run collection\n2. Generate insights\n3. Ask CEO question\n4. Show Agent Trace")
 
 stats = get_stats()
 

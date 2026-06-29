@@ -12,3 +12,5 @@ python-dateutil>=2.9.0
 vaderSentiment>=3.3.2
 plotly>=5.22.0
 scikit-learn>=1.4.0
+transformers
+torch
