@@ -17,7 +17,7 @@ INDUSTRY = "Automotive / Electric Mobility / Premium Vehicles"
 
 # Use a model that is actually available in your Ollama installation.
 # Check with: ollama list
-LLM_MODEL = os.getenv("BMW_AI_CEO_LLM", "llama3")
+LLM_MODEL = os.getenv("BMW_AI_CEO_LLM", "qwen3:8b")
 EMBEDDING_MODEL = os.getenv("BMW_AI_CEO_EMBEDDINGS", "all-MiniLM-L6-v2")
 
 MIN_DOCUMENTS_REQUIRED = 100
