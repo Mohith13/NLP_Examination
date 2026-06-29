@@ -1,77 +1,95 @@
-import sqlite3
-import chromadb
-from chromadb.utils import embedding_functions
-from config import SQLITE_DB_PATH, CHROMA_DB_PATH, EMBEDDING_MODEL
+"""Tool layer used by the AI CEO Agent.
 
-def get_chroma_collection():
-    """Connects to the ChromaDB vector store."""
-    chroma_client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
-    ef = embedding_functions.SentenceTransformerEmbeddingFunction(model_name=EMBEDDING_MODEL)
-    return chroma_client.get_or_create_collection(
-        name="bmw_strategic_intelligence", 
-        embedding_function=ef
+The point of this file is to show that the agent is not only Prompt -> LLM -> Answer.
+It can call explicit tools for retrieval, competitors, sentiment, risks, opportunities,
+and evidence validation.
+"""
+
+from __future__ import annotations
+
+from typing import Any, Dict, List
+
+from database import (
+    fetch_documents,
+    fetch_insights,
+    get_documents_by_ids,
+    get_recent_documents,
+    get_sentiment_distribution,
+    get_source_type_distribution,
+    search_vector_db,
+)
+from validator import validate_recommendation
+
+
+def get_recent_news(limit: int = 8) -> List[Dict[str, Any]]:
+    return get_recent_documents(limit=limit)
+
+
+def search_strategic_documents(query: str, top_k: int = 8) -> List[Dict[str, Any]]:
+    semantic_results = search_vector_db(query, top_k=top_k)
+    # Enrich vector results with full SQLite metadata where possible.
+    ids = [item["doc_id"] for item in semantic_results]
+    full_docs = {doc["doc_id"]: doc for doc in get_documents_by_ids(ids)}
+    output = []
+    for item in semantic_results:
+        full = full_docs.get(item["doc_id"], {})
+        merged = dict(full)
+        merged.update(item)
+        output.append(merged)
+    return output
+
+
+def get_documents_by_category(category: str, limit: int = 8) -> List[Dict[str, Any]]:
+    return fetch_documents(limit=limit, where="category LIKE ?", params=(f"%{category}%",))
+
+
+def get_risk_signals(limit: int = 8) -> List[Dict[str, Any]]:
+    return fetch_insights("risk", limit=limit)
+
+
+def get_opportunity_signals(limit: int = 8) -> List[Dict[str, Any]]:
+    return fetch_insights("opportunity", limit=limit)
+
+
+def get_trend_signals(limit: int = 8) -> List[Dict[str, Any]]:
+    return fetch_insights("trend", limit=limit)
+
+
+def get_competitor_activity(limit: int = 10) -> List[Dict[str, Any]]:
+    return fetch_documents(
+        limit=limit,
+        where="source_type LIKE ? OR category LIKE ? OR competitor != ''",
+        params=("%competitor%", "%Competitor%"),
     )
 
-def search_strategic_documents(query: str, n_results: int = 5) -> str:
-    """
-    TOOL: Searches the vector database for documents related to the query's meaning.
-    The AI Agent will use this to find specific risks, opportunities, or evidence.
-    """
-    try:
-        collection = get_chroma_collection()
-        results = collection.query(
-            query_texts=[query],
-            n_results=n_results
-        )
-        
-        if not results['documents'] or not results['documents'][0]:
-            return "No relevant documents found for this query."
-            
-        formatted_results = []
-        for i in range(len(results['documents'][0])):
-            doc_text = results['documents'][0][i]
-            metadata = results['metadatas'][0][i]
-            formatted_results.append(
-                f"Source: {metadata.get('source', 'Unknown')} | "
-                f"Date: {metadata.get('date', 'Unknown')}\n"
-                f"Content: {doc_text}\n---"
-            )
-            
-        return "\n".join(formatted_results)
-    except Exception as e:
-        return f"Database error during search: {str(e)}"
 
-def get_recent_news(limit: int = 3) -> str:
-    """
-    TOOL: Retrieves the absolute most recent news articles from the SQLite database.
-    The AI Agent will use this to understand the current immediate timeline.
-    """
-    try:
-        conn = sqlite3.connect(SQLITE_DB_PATH)
-        cursor = conn.cursor()
-        
-        # Pull the most recent entries based on publication date
-        cursor.execute('''
-            SELECT title, source, publish_date, raw_text 
-            FROM bmw_documents 
-            ORDER BY publish_date DESC 
-            LIMIT ?
-        ''', (limit,))
-        rows = cursor.fetchall()
-        conn.close()
-        
-        if not rows:
-            return "No recent news found. The database might be empty."
-            
-        formatted_results = []
-        for row in rows:
-            title, source, date, text = row
-            # Provide a truncated summary to save AI token space
-            formatted_results.append(
-                f"Title: {title}\nSource: {source} | Date: {date}\n"
-                f"Summary: {text[:250]}...\n---"
-            )
-            
-        return "\n".join(formatted_results)
-    except Exception as e:
-        return f"SQLite error retrieving news: {str(e)}"
+def get_sentiment_summary() -> Dict[str, Any]:
+    return {
+        "sentiment_distribution": get_sentiment_distribution(),
+        "source_type_distribution": get_source_type_distribution(),
+    }
+
+
+def validate_evidence_sources(
+    strategic_goal: str,
+    recommendation: str,
+    evidence: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    return validate_recommendation(strategic_goal, recommendation, evidence)
+
+
+TOOLS = {
+    "recent_news": get_recent_news,
+    "semantic_search": search_strategic_documents,
+    "category_search": get_documents_by_category,
+    "risk_signals": get_risk_signals,
+    "opportunity_signals": get_opportunity_signals,
+    "trend_signals": get_trend_signals,
+    "competitor_activity": get_competitor_activity,
+    "sentiment_summary": get_sentiment_summary,
+    "evidence_validation": validate_evidence_sources,
+}
+
+
+def list_tools() -> List[str]:
+    return sorted(TOOLS.keys())

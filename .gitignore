@@ -1,20 +1,10 @@
-# Virtual Environment
 venv/
-.venv/
-env/
-
-# Python Cache
 __pycache__/
 *.pyc
-*.pyo
-*.pyd
-
-# Local Database files (Keep repo lightweight)
-*.db
-*.sqlite3
-chroma_db/
-
-# Streamlit Local Configs & System Files
-.streamlit/
-.DS_Store
+.env
 .ipynb_checkpoints/
+
+# Generated local data
+data/bmw_metadata.db
+data/bmw_vector_store/
+*.db

@@ -1,104 +1,172 @@
-import urllib.parse
-import xml.etree.ElementTree as ET
+"""Live ingestion pipeline for BMW Strategic Intelligence Agent.
+
+Run:
+    python scraper.py
+    python scraper.py --reset
+
+This collects RSS items, tries to extract fuller article text, cleans/enriches documents,
+deduplicates them, stores metadata in SQLite, and indexes text into ChromaDB.
+"""
+
+from __future__ import annotations
+
+import argparse
+from datetime import datetime
+from typing import Any, Dict, List
+
+import feedparser
 import requests
+import trafilatura
 from bs4 import BeautifulSoup
-import uuid
+from dateutil import parser as date_parser
 
-# Import our custom database functions
-from database import init_databases, store_document
+from config import COMPANY_NAME, MAX_ARTICLE_CHARS, REQUEST_TIMEOUT, RSS_SOURCES, TARGET_DOCUMENTS
+from database import get_document_count, init_database, store_document
+from intelligence import clean_text, enrich_document
 
-def clean_html_text(raw_html):
-    """Cleans up raw HTML string into plain, readable text for the LLM."""
-    if not raw_html:
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (compatible; BMW-AI-CEO-Agent/1.0; academic prototype)"
+}
+
+
+def normalize_date(value: str | None) -> str:
+    if not value:
         return ""
-    soup = BeautifulSoup(raw_html, "html.parser")
-    return soup.get_text(separator=" ").strip()
-
-def fetch_rss_feed(url, source_name):
-    """Fetches articles from a given RSS feed URL and returns structured data."""
-    print(f"📡 Fetching live data from {source_name}...")
-    # We use a User-Agent header so websites don't block us thinking we are a malicious bot
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-    }
-    
     try:
-        response = requests.get(url, headers=headers, timeout=15)
-        if response.status_code != 200:
-            print(f"⚠ Failed to pull from {source_name}. Status: {response.status_code}")
-            return []
-            
-        # Parse the XML content
-        root = ET.fromstring(response.content)
-        articles = []
-        
-        # Loop through every <item> tag in the RSS feed
-        for item in root.findall(".//item"):
-            title = item.find("title").text if item.find("title") is not None else "No Title"
-            link = item.find("link").text if item.find("link") is not None else ""
-            pub_date = item.find("pubDate").text if item.find("pubDate") is not None else ""
-            
-            # Extract content text and clean it
-            description_tag = item.find("description")
-            description = description_tag.text if description_tag is not None else ""
-            clean_text = clean_html_text(description)
-            
-            # If the description is too short, we fall back to the title
-            if not clean_text or len(clean_text) < 10:
-                clean_text = f"Market briefing regarding: {title}"
+        return date_parser.parse(value).date().isoformat()
+    except Exception:
+        return ""
 
-            articles.append({
+
+def strip_html_summary(summary: str) -> str:
+    if not summary:
+        return ""
+    soup = BeautifulSoup(summary, "html.parser")
+    return clean_text(soup.get_text(" "))
+
+
+def fetch_full_article(url: str) -> str:
+    """Try trafilatura first; fallback to requests + BeautifulSoup text."""
+    if not url:
+        return ""
+
+    try:
+        downloaded = trafilatura.fetch_url(url)
+        if downloaded:
+            extracted = trafilatura.extract(downloaded, include_comments=False, include_tables=False)
+            if extracted and len(extracted.strip()) > 300:
+                return clean_text(extracted)[:MAX_ARTICLE_CHARS]
+    except Exception:
+        pass
+
+    try:
+        response = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+        if response.ok:
+            soup = BeautifulSoup(response.text, "html.parser")
+            for tag in soup(["script", "style", "noscript", "header", "footer", "nav"]):
+                tag.decompose()
+            text = soup.get_text(" ")
+            text = clean_text(text)
+            if len(text) > 300:
+                return text[:MAX_ARTICLE_CHARS]
+    except Exception:
+        pass
+
+    return ""
+
+
+def parse_feed_source(entry: Any, fallback_name: str) -> str:
+    source = getattr(entry, "source", None)
+    if isinstance(source, dict):
+        return source.get("title") or fallback_name
+    return fallback_name
+
+
+def collect_from_rss(source_config: Dict[str, str], max_items: int = 40) -> List[Dict[str, Any]]:
+    feed = feedparser.parse(source_config["url"])
+    documents: List[Dict[str, Any]] = []
+
+    for entry in feed.entries[:max_items]:
+        title = clean_text(getattr(entry, "title", "Untitled"))
+        url = getattr(entry, "link", "")
+        published = getattr(entry, "published", "") or getattr(entry, "updated", "")
+        summary = strip_html_summary(getattr(entry, "summary", ""))
+        source = parse_feed_source(entry, source_config["name"])
+
+        full_text = fetch_full_article(url)
+        raw_text = full_text if len(full_text) > len(summary) else summary
+
+        if len(raw_text) < 120:
+            continue
+
+        documents.append(
+            {
                 "title": title,
-                "link": link,
-                "publish_date": pub_date,
-                "raw_text": clean_text,
-                "source": source_name
-            })
-        return articles
-    except Exception as e:
-        print(f"❌ Error parsing {source_name}: {e}")
-        return []
+                "source": source,
+                "source_type": source_config["source_type"],
+                "url": url,
+                "publish_date": normalize_date(published),
+                "collected_at": datetime.utcnow().isoformat(timespec="seconds"),
+                "company": COMPANY_NAME,
+                "raw_text": raw_text,
+            }
+        )
 
-def run_pipeline():
-    """Main execution loop to harvest data and populate our hybrid database."""
-    print("🔄 Initializing Strategic Intelligence Pipeline...")
-    
-    # 1. Ensure databases exist before we try to save to them
-    init_databases()
-    
-    # 2. Define 3 independent public data streams for BMW
-    # Using urllib.parse.quote ensures complex search terms don't break the URL
-    feeds = {
-        "Yahoo Finance (BMW)": "https://finance.yahoo.com/rss/headline?s=BMW.DE",
-        "Google News (BMW Group)": f"https://news.google.com/rss/search?q={urllib.parse.quote('BMW Group corporate')}&hl=en-US&gl=US&ceid=US:en",
-        "EV Market Trends": f"https://news.google.com/rss/search?q={urllib.parse.quote('automotive electric vehicle industry trends')}&hl=en-US&gl=US&ceid=US:en"
+    return documents
+
+
+def run_ingestion(reset: bool = False, target_documents: int = TARGET_DOCUMENTS) -> Dict[str, Any]:
+    init_database(reset=reset)
+
+    attempted = 0
+    inserted = 0
+    failed_sources: List[str] = []
+
+    for source_config in RSS_SOURCES:
+        try:
+            docs = collect_from_rss(source_config, max_items=45)
+        except Exception as exc:
+            failed_sources.append(f"{source_config['name']}: {exc}")
+            continue
+
+        for raw_doc in docs:
+            attempted += 1
+            try:
+                enriched = enrich_document(raw_doc)
+                doc_id = store_document(enriched)
+                if doc_id:
+                    inserted += 1
+            except Exception as exc:
+                print(f"[WARN] Failed to store document: {exc}")
+
+        if get_document_count() >= target_documents:
+            break
+
+    total = get_document_count()
+    return {
+        "attempted": attempted,
+        "inserted": inserted,
+        "total_documents": total,
+        "target_documents": target_documents,
+        "failed_sources": failed_sources,
+        "status": "OK" if total >= 100 else "NEEDS_MORE_DATA",
     }
-    
-    total_processed = 0
-    
-    # 3. Loop through each source, download, and save
-    for source_name, url in feeds.items():
-        extracted_docs = fetch_rss_feed(url, source_name)
-        print(f"📥 Found {len(extracted_docs)} documents from {source_name}")
-        
-        for doc in extracted_docs:
-            # Generate a unique hash identifier for every document
-            unique_id = f"bmw_doc_{uuid.uuid4().hex[:12]}"
-            
-            # Send immediately to our dual-database setup
-            store_document(
-                doc_id=unique_id,
-                title=doc["title"],
-                source=doc["source"],
-                url=doc["link"],
-                publish_date=doc["publish_date"],
-                raw_text=doc["raw_text"]
-            )
-            total_processed += 1
-            
-    print(f"\n✨ Ingestion complete. Total entries indexed: {total_processed}")
-    if total_processed < 100:
-        print("💡 Note: If you have less than 100 documents, run the script again tomorrow, or add more RSS feeds to hit the minimum requirement.")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Run BMW intelligence ingestion pipeline.")
+    parser.add_argument("--reset", action="store_true", help="Delete existing database/vector store first.")
+    parser.add_argument("--target", type=int, default=TARGET_DOCUMENTS, help="Target document count.")
+    args = parser.parse_args()
+
+    result = run_ingestion(reset=args.reset, target_documents=args.target)
+    print("\nBMW Strategic Intelligence Ingestion Result")
+    print("=" * 52)
+    for key, value in result.items():
+        print(f"{key}: {value}")
+    if result["total_documents"] < 100:
+        print("\nTip: Run again later or add more RSS sources in config.py.")
+
 
 if __name__ == "__main__":
-    run_pipeline()
+    main()
