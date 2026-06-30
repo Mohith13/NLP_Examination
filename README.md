@@ -32,33 +32,27 @@ Goal → Plan → Tool Selection → Retrieve → Analyze → Recommend → Vali
 
 ## Architecture
 
-```text
-Live RSS / Public Sources
-        ↓
-scraper.py
-Collects BMW-related live documents
-        ↓
-intelligence.py
-Cleaning + deduplication + enrichment
-Sentiment + categories + risks + opportunities + trends
-        ↓
-database.py
-Stores enriched data
-        ↓
-SQLite metadata database + ChromaDB vector store
-        ↓
-tools.py
-Exposes retrieval and intelligence tools
-        ↓
-agent.py
-Custom Strategic Intelligence Agent
-Goal → Plan → Tool Selection → Retrieve → Analyze → Recommend
-        ↓
-validator.py
-Evidence validation + confidence score
-        ↓
-Main_app.py
-Executive Streamlit dashboard
+```mermaid
+flowchart TD
+
+    A[Public Live Sources<br/>RSS, News, Market, Competitor Data]
+    A --> B[scraper.py<br/>Collect Documents]
+
+    B --> C[intelligence.py<br/>Clean + Analyze Documents<br/>Sentiment, Risks, Opportunities, Trends]
+
+    C --> D[database.py<br/>Store Knowledge]
+
+    D --> E[(SQLite<br/>Metadata)]
+    D --> F[(ChromaDB<br/>Vector Store)]
+
+    E --> G[tools.py<br/>Retrieval + Intelligence Tools]
+    F --> G
+
+    G --> H[agent.py<br/>Strategic Intelligence Agent<br/>Plan → Retrieve → Analyze → Recommend]
+
+    H --> I[validator.py<br/>Validate Evidence<br/>Confidence Score]
+
+    I --> J[Main_app.py<br/>Streamlit Dashboard<br/>CEO Briefing + Agent Trace]
 ```
 
 ---

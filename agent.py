@@ -23,6 +23,46 @@ from tools import (
 )
 
 
+def is_in_scope(goal: str) -> bool:
+    """
+    Checks whether the user question is relevant to the BMW Strategic Intelligence Agent.
+    This prevents the system from answering random out-of-domain prompts.
+    """
+    if not goal or len(goal.strip()) < 5:
+        return False
+
+    goal_lower = goal.lower()
+
+    allowed_keywords = [
+        # Company and industry
+        "bmw", "automotive", "car", "cars", "vehicle", "vehicles",
+        "mobility", "premium", "luxury",
+
+        # EV and technology strategy
+        "ev", "electric vehicle", "electric vehicles", "battery",
+        "charging", "software-defined", "software defined",
+        "software", "digital", "ai", "autonomous", "technology",
+        "innovation", "platform", "neue klasse",
+
+        # Market and business strategy
+        "market", "strategy", "strategic", "growth", "sales",
+        "demand", "pricing", "margin", "revenue", "profit",
+        "investment", "product", "portfolio",
+
+        # Risks, opportunities, trends
+        "risk", "risks", "opportunity", "opportunities",
+        "trend", "trends", "threat", "threats", "regulation",
+        "supply chain", "competition", "competitor", "competitors",
+
+        # Main competitors and regions
+        "tesla", "byd", "mercedes", "mercedes-benz",
+        "volkswagen", "vw", "audi", "china", "chinese",
+        "europe", "european", "usa", "us"
+    ]
+
+    return any(keyword in goal_lower for keyword in allowed_keywords)
+
+
 def call_llm(prompt: str, temperature: float = 0.2) -> str:
     """Call local Ollama. If Ollama is unavailable, return a useful fallback message."""
     try:
@@ -347,6 +387,42 @@ def fallback_recommendation(goal: str, evidence: List[Dict[str, Any]], validatio
 
 
 def run_agent(strategic_goal: str) -> Dict[str, Any]:
+    if not is_in_scope(strategic_goal):
+        return {
+            "goal": strategic_goal,
+            "plan": ["Input scope check failed"],
+            "tools_used": [],
+            "evidence": [],
+            "supporting_evidence": [],
+            "analysis": "The question is outside the BMW strategic intelligence scope.",
+            "recommendation": (
+                "This system is designed for BMW strategic intelligence. "
+                "Please ask a question related to BMW, automotive strategy, EVs, "
+                "competitors, risks, opportunities, market trends, technology, "
+                "or business recommendations."
+            ),
+            "expected_impact": "Not applicable because the question is outside the system scope.",
+            "risk_assessment": "Not applicable because no BMW strategic analysis was performed.",
+            "priority": "N/A",
+            "confidence_score": 0,
+            "validation": {
+                "validation_status": "OUT_OF_SCOPE",
+                "confidence_score": 0,
+                "checks": {
+                    "in_scope_question": False,
+                    "evidence_available": False,
+                    "recommendation_generated": False
+                },
+                "message": "Workflow stopped before retrieval and LLM generation because the query is outside scope."
+            },
+            "validation_status": "OUT_OF_SCOPE",
+            "agent_trace": [
+                "Received user goal",
+                "Checked input scope",
+                "Stopped workflow because the question is outside BMW strategic intelligence scope"
+            ]
+        }
+
     strategic_goal = strategic_goal.strip()
     if not strategic_goal:
         strategic_goal = "If you were the CEO of BMW today, what would you do next and why?"
