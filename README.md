@@ -1,137 +1,210 @@
 # BMW AI CEO: Strategic Intelligence Agent
 
-This project is an AI-powered Strategic Intelligence Agent for **BMW Group**. It collects live public information, stores and indexes evidence, analyzes risks/opportunities/trends/sentiment, and generates CEO-level strategic recommendations with validation.
+## Project Overview
 
-The system is intentionally designed as more than a simple RAG chatbot. RAG is one tool inside a wider agent workflow:
+This project implements a **BMW Strategic Intelligence Agent** for CEO-level decision support.
+
+The system collects live public information about BMW, the automotive market, EV competition, software-defined vehicles, technology trends and competitor activity. It then cleans, enriches, stores, retrieves and analyzes this information to generate evidence-backed strategic recommendations.
+
+The main idea of this project is:
+
+> The LLM is not used as a standalone chatbot. It is part of a controlled strategic intelligence pipeline with live data collection, retrieval, analysis, tool usage and validation.
+
+---
+
+## Core Objective
+
+The goal is to support strategic decision-making for BMW by answering questions such as:
+
+- What are the major risks BMW faces in the EV market?
+- What opportunities should BMW focus on?
+- How strong is Chinese EV competition?
+- What trends are emerging around software-defined vehicles?
+- What should BMW do in the next 12 months?
+
+The system follows an agentic workflow:
 
 ```text
-Goal → Plan → Retrieve → Analyze → Decide → Recommend → Validate
+Goal → Plan → Tool Selection → Retrieve → Analyze → Recommend → Validate
 ```
 
-## Company
-
-- Company: BMW Group
-- Industry: Automotive / Electric Mobility / Premium Vehicles
-- Competitors monitored: Mercedes-Benz, Volkswagen, Tesla, BYD
-- Strategic themes: EV transition, Neue Klasse, battery supply chain, China EV competition, software-defined vehicles, autonomous driving, regulation, premium market, charging infrastructure, profit margins
+---
 
 ## Architecture
 
 ```text
-Live RSS/Public Sources
+Live RSS / Public Sources
         ↓
 scraper.py
+Collects BMW-related live documents
         ↓
+intelligence.py
 Cleaning + deduplication + enrichment
+Sentiment + categories + risks + opportunities + trends
+        ↓
+database.py
+Stores enriched data
         ↓
 SQLite metadata database + ChromaDB vector store
         ↓
-intelligence.py generates sentiment, categories, risks, opportunities, trends
+tools.py
+Exposes retrieval and intelligence tools
         ↓
-tools.py exposes retrieval and intelligence tools
+agent.py
+Custom Strategic Intelligence Agent
+Goal → Plan → Tool Selection → Retrieve → Analyze → Recommend
         ↓
-agent.py orchestrates planning, retrieval, analysis, recommendation, validation
+validator.py
+Evidence validation + confidence score
         ↓
-Main_app.py executive Streamlit dashboard
+Main_app.py
+Executive Streamlit dashboard
 ```
 
-## Data Flow
+---
+
+## Project Structure
 
 ```text
-RSS source → article URL → article text extraction → clean text
-→ content hash duplicate check → sentiment/category/relevance enrichment
-→ SQLite structured metadata → ChromaDB semantic index
-→ agent tools retrieve evidence → LLM analyzes evidence
-→ validator checks recommendation → CEO dashboard displays result
+bmw_ai_ceo/
+├── Main_app.py
+├── README.md
+├── agent.py
+├── config.py
+├── database.py
+├── intelligence.py
+├── prompts.py
+├── requirements.txt
+├── scraper.py
+├── tools.py
+├── validator.py
+├── .gitignore
+└── data/
+    ├── bmw_metadata.db
+    └── bmw_vector_store/
 ```
 
-## Files
+---
 
-| File | Purpose |
-|---|---|
-| `scraper.py` | Collects live BMW intelligence from public RSS/news sources |
-| `database.py` | Manages SQLite database and ChromaDB vector store |
-| `intelligence.py` | Cleans text, classifies category, calculates sentiment, detects risks/opportunities/trends |
-| `tools.py` | Provides explicit tools for the agent |
-| `agent.py` | Main agent workflow and orchestration |
-| `validator.py` | Evidence-based validation and confidence scoring |
-| `prompts.py` | Prompt templates for planning, analysis, and CEO briefing |
-| `Main_app.py` | Executive Intelligence Dashboard |
-| `config.py` | Company, model, source, and path configuration |
+## Main Components
 
-## Agent Tools
+### `scraper.py`
 
-The agent can use the following tools:
+Collects live BMW-related documents from public sources such as market news, competitor updates, technology news and automotive industry sources.
+
+It is responsible for:
+
+- Live data collection
+- Extracting titles, links, source names and article text
+- Sending documents into the processing pipeline
+- Supporting reset and re-ingestion
+
+Without this file, the system would become a static chatbot instead of a live intelligence system.
+
+---
+
+### `intelligence.py`
+
+This is the analysis and enrichment layer.
+
+It performs:
+
+- Text cleaning
+- Deduplication hash generation
+- Category classification
+- FinBERT sentiment analysis
+- Competitor detection
+- Strategic relevance scoring
+- Risk signal detection
+- Opportunity signal detection
+- Trend detection
+
+This file turns raw documents into structured business intelligence.
+
+---
+
+### `database.py`
+
+This file manages the storage layer.
+
+It uses:
+
+- **SQLite** for structured metadata
+- **ChromaDB** for vector embeddings and semantic retrieval
+
+SQLite stores information such as title, source, date, category, sentiment and document text.
+
+ChromaDB stores embeddings so the system can perform semantic search.
+
+---
+
+### `tools.py`
+
+This file exposes callable tools to the agent.
+
+Main tools include:
 
 - `semantic_search`
 - `recent_news`
-- `competitor_activity`
+- `sentiment_summary`
 - `risk_signals`
 - `opportunity_signals`
 - `trend_signals`
-- `sentiment_summary`
+- `competitor_activity`
 - `evidence_validation`
 
-This proves that the LLM is not the whole system. The LLM helps with planning and executive language, while tools handle retrieval, monitoring, analysis, and validation.
+These tools allow the agent to retrieve and analyze evidence before generating recommendations.
 
-## Validation Strategy
+---
 
-Each recommendation is validated using:
+### `agent.py`
 
-1. Evidence count
-2. Independent source diversity
-3. Evidence recency
-4. Category/goal match
-5. Sentiment consistency
+This is the main Strategic Intelligence Agent.
 
-The final output includes:
+The most important function is:
 
-- Validation status
-- Confidence score
+```python
+run_agent()
+```
+
+It performs:
+
+- Goal understanding
+- Planning
+- Tool selection
+- Evidence retrieval
+- Evidence analysis
+- Recommendation generation
+- Validation request
+- Agent Trace generation
+
+This file is the main orchestrator of the system.
+
+---
+
+### `validator.py`
+
+This file validates recommendations before they are shown to the user.
+
+It checks:
+
 - Evidence count
-- Source types
-- Component scores
+- Source diversity
+- Recency
+- Category relevance
+- Sentiment consistency
+- Confidence threshold
+- Non-empty recommendation
 
-## Installation
+The confidence score is not the LLM's self-confidence. It is an evidence-quality score.
 
-```bash
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# venv\Scripts\activate   # Windows
-pip install -r requirements.txt
-```
+---
 
-Install and start Ollama if not already running. Check available models:
+### `Main_app.py`
 
-```bash
-ollama list
-```
+This is the Streamlit executive dashboard.
 
-If `qwen3:8b` is not available, change `LLM_MODEL` in `config.py` to a model available on your server.
-
-## Run the Pipeline
-
-Collect live data:
-
-```bash
-python scraper.py --reset
-```
-
-Run dashboard:
-
-```bash
-streamlit run Main_app.py
-```
-
-Inside the dashboard:
-
-1. Click **Run Live Data Collection**
-2. Click **Generate Risk/Opportunity/Trend Insights**
-3. Open **CEO Briefing**
-4. Ask: `If you were the CEO of BMW today, what would you do next and why?`
-5. Open **Agent Trace** to show the complete agent workflow
-
-## Dashboard Sections
+Dashboard sections include:
 
 - Company Overview
 - Market Intelligence
@@ -143,20 +216,294 @@ Inside the dashboard:
 - CEO Briefing
 - Agent Trace
 
+---
 
+## LLM Usage
+
+The system uses a local open-source LLM through Ollama.
+
+The model is configured in `config.py`:
+
+```python
+LLM_MODEL = "qwen3:8b"
+```
+
+or another installed Ollama model such as:
+
+```python
+LLM_MODEL = "llama3"
+```
+
+The LLM is used for:
+
+- Planning
+- Strategic analysis
+- Recommendation generation
+- CEO briefing writing
+
+The LLM is not responsible for:
+
+- Data collection
+- Database storage
+- Embedding generation
+- FinBERT sentiment analysis
+- Rule-based risk detection
+- Confidence scoring
+- Dashboard rendering
+
+---
+
+## Custom Agent vs LangChain or LangGraph
+
+This project uses a custom Python orchestrator instead of LangChain or LangGraph.
+
+Reason:
+
+> The goal was to make the workflow transparent, lightweight and easy to explain during examination and live coding.
+
+The custom workflow is:
+
+```text
+Goal → Plan → Tool Selection → Retrieve → Analyze → Recommend → Validate
+```
+
+This is compatible with LangGraph. Each current function could become a LangGraph node:
+
+```text
+Planner Node
+Tool Selector Node
+Retriever Node
+Analyzer Node
+Recommendation Node
+Validator Node
+Output Node
+```
+
+In a production extension, LangGraph could be used for:
+
+- Conditional branching
+- Retry loops
+- Human-in-the-loop validation
+- State persistence
+- Multi-agent workflows
+
+---
+
+## Difference From Basic RAG
+
+A basic RAG system usually follows:
+
+```text
+User question → Retrieve documents → LLM answer
+```
+
+This project follows:
+
+```text
+CEO goal → Plan → Select tools → Retrieve evidence → Analyze risks/opportunities/trends → Generate recommendation → Validate → Dashboard output
+```
+
+Therefore, RAG is only one part of the system.
+
+The full system includes:
+
+- Retrieval
+- Tool usage
+- Business intelligence analysis
+- Sentiment monitoring
+- Risk detection
+- Opportunity detection
+- Trend detection
+- Evidence validation
+- Executive dashboard
+
+---
+
+## Sentiment Analysis
+
+The system uses FinBERT for business sentiment analysis.
+
+Sentiment labels:
+
+- Positive
+- Neutral
+- Negative
+
+Why FinBERT:
+
+> BMW-related articles are business and market texts. FinBERT is more suitable for financial and corporate language than general sentiment tools.
+
+Most business news articles are factual, so neutral sentiment is expected.
+
+---
+
+## Confidence Score
+
+The confidence score is calculated by `validator.py`.
+
+It is based on evidence quality, not LLM self-confidence.
+
+Factors include:
+
+- Number of evidence items
+- Diversity of source types
+- Recency of evidence
+- Category match with the strategic question
+- Sentiment consistency
+- Recommendation completeness
+
+High confidence means the recommendation is well supported by retrieved evidence. It does not mean the recommendation is guaranteed to be correct.
+
+---
+
+## How to Run the Project
+
+### 1. Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 2. Start Ollama
+
+```bash
+ollama serve
+```
+
+If Ollama is already running, this may show an address already in use message. That is fine.
+
+### 3. Pull the recommended model
+
+```bash
+ollama pull qwen3:8b
+```
+
+Alternative backup model:
+
+```bash
+ollama pull llama3
+```
+
+### 4. Configure the model
+
+In `config.py`, set:
+
+```python
+LLM_MODEL = "qwen3:8b"
+```
+
+or:
+
+```python
+LLM_MODEL = "llama3"
+```
+
+### 5. Run data ingestion
+
+```bash
+python scraper.py --reset
+```
+
+Expected result:
+
+```text
+BMW Strategic Intelligence Ingestion Result
+attempted: 180
+inserted: 177
+status: OK
+```
+
+The exact number may change depending on available live sources.
+
+### 6. Run the dashboard
+
+```bash
+streamlit run Main_app.py --server.address 0.0.0.0 --server.port 8501
+```
+
+---
+
+## Suggested Demo Question
+
+Use this question in the CEO Briefing tab:
+
+```text
+What should BMW do about Chinese EV competition, software-defined vehicles, and EV market pressure in the next 12 months?
+```
+
+This question activates:
+
+- Semantic search
+- Competitor intelligence
+- Risk signals
+- Opportunity signals
+- Trend signals
+- Sentiment summary
+- Evidence validation
+
+---
+
+## Agent Trace
+
+Agent Trace shows the high-level workflow followed by the agent:
+
+```text
+Goal received
+Plan generated
+Tools selected
+Evidence retrieved
+Analysis completed
+Recommendation generated
+Validation completed
+```
+
+Agent Trace is a structured audit log. It is not private chain-of-thought.
+
+---
 
 ## Limitations
 
-- Some publishers may block article extraction, so the system falls back to RSS summaries.
-- RSS source availability can change.
-- Lightweight keyword-based intelligence rules are used for explainability.
-- The LLM depends on local Ollama availability.
+This is an academic prototype, not a complete enterprise deployment.
 
-## Future Improvements
+Current limitations:
 
-- Add scheduled collection
-- Add PostgreSQL/pgvector
-- Add knowledge graph for company/competitor relationships
-- Add stronger financial metrics
-- Add more official company and regulatory sources
-- Add contradiction detection between evidence sources
+- Uses public web and RSS sources
+- Risk and opportunity extraction partly uses rule-based logic
+- Source quality depends on available public feeds
+- No scheduled background monitoring yet
+- No human approval layer yet
+- No LangGraph-based retry loop yet
+
+Future improvements:
+
+- Add financial APIs
+- Add official BMW investor documents
+- Add scheduled daily ingestion
+- Add LangGraph workflow with conditional loops
+- Add human-in-the-loop validation
+- Add more advanced classifiers
+- Add stronger source reliability scoring
+- Deploy as a full web application
+
+---
+
+## Final Summary
+
+This project demonstrates an evidence-based Strategic Intelligence Agent for BMW.
+
+It combines:
+
+- Live data collection
+- Data cleaning and enrichment
+- SQLite metadata storage
+- ChromaDB semantic retrieval
+- FinBERT sentiment analysis
+- Risk, opportunity and trend detection
+- Custom agent orchestration
+- Local LLM generation through Ollama
+- Recommendation validation
+- Streamlit executive dashboard
+
+The main contribution is:
+
+> The system controls how the answer is created, using evidence, tools, analysis and validation before presenting a CEO-level recommendation.
